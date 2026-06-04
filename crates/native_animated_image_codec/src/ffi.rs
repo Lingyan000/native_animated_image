@@ -49,7 +49,10 @@ pub unsafe extern "C" fn native_animated_image_decode(
         }
         Err(DecodeError::InvalidInput) => ERR_INVALID,
         Err(DecodeError::UnsupportedFormat) => ERR_UNSUPPORTED,
-        Err(DecodeError::EmptyFrames) | Err(DecodeError::Gif(_)) => ERR_DECODE,
+        Err(DecodeError::EmptyFrames)
+        | Err(DecodeError::Gif(_))
+        | Err(DecodeError::Png(_))
+        | Err(DecodeError::Webp(_)) => ERR_DECODE,
     }
 }
 
@@ -226,11 +229,11 @@ mod tests {
 
     #[test]
     fn ffi_decode_unsupported() {
-        // PNG (not APNG yet → unsupported in current MVP)
-        let png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00";
+        // JPEG magic bytes — dispatcher 不识别,返 ERR_UNSUPPORTED
+        let jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01";
         let mut handle: u64 = 0;
         let rc = unsafe {
-            native_animated_image_decode(png_bytes.as_ptr(), png_bytes.len(), &mut handle)
+            native_animated_image_decode(jpeg_bytes.as_ptr(), jpeg_bytes.len(), &mut handle)
         };
         assert_eq!(rc, ERR_UNSUPPORTED);
     }

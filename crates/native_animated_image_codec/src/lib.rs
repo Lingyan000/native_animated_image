@@ -16,8 +16,10 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use thiserror::Error;
 
+pub mod apng_decoder;
 pub mod ffi;
 pub mod gif_decoder;
+pub mod webp_decoder;
 
 /// 解码后的动图(全帧 RGBA + 元数据)
 pub struct DecodedImage {
@@ -60,13 +62,22 @@ pub enum DecodeError {
     #[error("GIF decode error: {0}")]
     Gif(String),
 
+    #[error("PNG/APNG decode error: {0}")]
+    Png(String),
+
+    #[error("WebP decode error: {0}")]
+    Webp(String),
+
     #[error("decoded result has zero frames")]
     EmptyFrames,
 }
 
 /// 根据 magic bytes 分发到对应解码器
+///
+/// 静态 PNG / 静态 WebP 会返回 [DecodeError::UnsupportedFormat],由 dart 端 fallback
+/// 到 Flutter 内置 codec(静态格式 Flutter Skia 解码稳定,无需 Rust)。
 pub fn decode_bytes(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
-    if bytes.len() < 6 {
+    if bytes.len() < 12 {
         return Err(DecodeError::InvalidInput);
     }
 
@@ -75,8 +86,17 @@ pub fn decode_bytes(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
         return gif_decoder::decode(bytes);
     }
 
-    // TODO: APNG (PNG + acTL chunk)
-    // TODO: animated WebP (RIFF...WEBP + VP8X with anim flag)
+    // PNG/APNG: 0x89 'P' 'N' 'G' \r \n \x1a \n
+    if bytes[0..8] == [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] {
+        // apng_decoder 会检查是否有 acTL chunk,如果是静态 PNG 返回 UnsupportedFormat
+        return apng_decoder::decode(bytes);
+    }
+
+    // WebP: "RIFF" .... "WEBP"
+    if &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        // webp_decoder 会检查是否有 ANIM chunk,如果是静态 WebP 返回 UnsupportedFormat
+        return webp_decoder::decode(bytes);
+    }
 
     Err(DecodeError::UnsupportedFormat)
 }
@@ -161,8 +181,9 @@ mod tests {
 
     #[test]
     fn test_unsupported_format() {
-        let bytes = b"\x89PNG\r\n\x1a\n"; // PNG (not APNG yet)
-        let result = decode_bytes(bytes);
+        // JPEG magic bytes — dispatcher 不识别,直接返 UnsupportedFormat
+        let jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01"; // JPEG signature + JFIF
+        let result = decode_bytes(jpeg_bytes);
         assert!(matches!(result, Err(DecodeError::UnsupportedFormat)));
     }
 

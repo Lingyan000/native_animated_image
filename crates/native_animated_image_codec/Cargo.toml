@@ -16,6 +16,12 @@ name = "native_animated_image_codec"
 # GIF decoder (frame-by-frame, indexed-to-RGBA via ColorOutput::RGBA)
 gif = "0.13"
 
+# PNG / APNG decoder (acTL / fcTL / fdAT chunks for animation)
+png = "0.18"
+
+# Animated WebP decoder (lossy + lossless animation support)
+image-webp = "0.2"
+
 # JSON for FFI metadata transfer
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -24,7 +30,7 @@ serde_json = "1"
 parking_lot = "0.12"
 
 # Error types
-thiserror = "1"
+thiserror = "2"
 
 [profile.release]
 lto = true
