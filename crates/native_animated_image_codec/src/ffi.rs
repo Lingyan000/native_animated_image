@@ -104,7 +104,9 @@ pub unsafe extern "C" fn native_animated_image_get_frame_rgba(
     //
     // 用 raw pointer 从 with_image 闭包内拿出来 — 闭包返回 (ptr, len)
     let result = with_image(handle, |img| {
-        img.frames.get(frame_idx as usize).map(|f| (f.rgba.as_ptr(), f.rgba.len()))
+        img.frames
+            .get(frame_idx as usize)
+            .map(|f| (f.rgba.as_ptr(), f.rgba.len()))
     });
 
     match result {
@@ -146,9 +148,8 @@ pub unsafe extern "C" fn native_animated_image_free_string(s: *mut c_char) {
 #[no_mangle]
 pub extern "C" fn native_animated_image_version() -> *const c_char {
     static VERSION: OnceLock<CString> = OnceLock::new();
-    let v = VERSION.get_or_init(|| {
-        CString::new(env!("CARGO_PKG_VERSION")).expect("version contains no NUL")
-    });
+    let v = VERSION
+        .get_or_init(|| CString::new(env!("CARGO_PKG_VERSION")).expect("version contains no NUL"));
     v.as_ptr()
 }
 
@@ -168,9 +169,8 @@ mod tests {
     fn ffi_full_lifecycle() {
         // 1. decode
         let mut handle: u64 = 0;
-        let rc = unsafe {
-            native_animated_image_decode(TINY_GIF.as_ptr(), TINY_GIF.len(), &mut handle)
-        };
+        let rc =
+            unsafe { native_animated_image_decode(TINY_GIF.as_ptr(), TINY_GIF.len(), &mut handle) };
         assert_eq!(rc, ERR_OK);
         assert!(handle > 0);
 

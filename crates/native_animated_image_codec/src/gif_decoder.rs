@@ -113,6 +113,7 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
 
 /// 把局部 RGBA 帧数据合成到全尺寸 canvas 上(透明像素不覆盖)
 #[inline]
+#[allow(clippy::too_many_arguments)] // 像素坐标参数本身就多,拆 struct 反而冗余
 fn composite_frame_to_canvas(
     canvas: &mut [u8],
     canvas_w: u32,
@@ -234,10 +235,13 @@ mod tests {
             encoder.set_repeat(Repeat::Infinite).unwrap();
 
             // Frame 0: 全红色 (RGBA = 255,0,0,255 → indexed 0)
-            let mut f0 = GifFrame::from_rgba(2, 2, &mut [
-                255, 0, 0, 255, 255, 0, 0, 255,
-                255, 0, 0, 255, 255, 0, 0, 255,
-            ]);
+            let mut f0 = GifFrame::from_rgba(
+                2,
+                2,
+                &mut [
+                    255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+                ],
+            );
             f0.dispose = DisposalMethod::Background;
             f0.delay = 4; // 40ms
             encoder.write_frame(&f0).unwrap();
@@ -267,7 +271,7 @@ mod tests {
         assert_eq!(f1[1], 255); // G
         assert_eq!(f1[2], 0); // B
         assert_eq!(f1[3], 255); // A
-        // (1,0) 像素 应该透明
+                                // (1,0) 像素 应该透明
         assert_eq!(f1[4 + 3], 0); // A=0 透明
     }
 }

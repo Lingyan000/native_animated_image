@@ -111,7 +111,9 @@ impl DecodedImage {
             frames: self
                 .frames
                 .iter()
-                .map(|f| FrameMetadata { delay_ms: f.delay_ms })
+                .map(|f| FrameMetadata {
+                    delay_ms: f.delay_ms,
+                })
                 .collect(),
         }
     }
@@ -190,7 +192,10 @@ mod tests {
     #[test]
     fn test_invalid_input() {
         assert!(matches!(decode_bytes(&[]), Err(DecodeError::InvalidInput)));
-        assert!(matches!(decode_bytes(b"abc"), Err(DecodeError::InvalidInput)));
+        assert!(matches!(
+            decode_bytes(b"abc"),
+            Err(DecodeError::InvalidInput)
+        ));
     }
 
     #[test]

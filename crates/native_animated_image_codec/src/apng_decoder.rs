@@ -69,7 +69,11 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
             let fctl = info
                 .frame_control()
                 .ok_or_else(|| DecodeError::Png("missing fcTL chunk".into()))?;
-            let delay_den = if fctl.delay_den == 0 { 100u32 } else { fctl.delay_den as u32 };
+            let delay_den = if fctl.delay_den == 0 {
+                100u32
+            } else {
+                fctl.delay_den as u32
+            };
             let delay_ms = (fctl.delay_num as u32 * 1000) / delay_den;
             (
                 fctl.x_offset,
@@ -208,6 +212,7 @@ fn pixels_to_rgba(buf: &[u8], color_type: ColorType, width: u32, height: u32) ->
 
 /// 把帧 RGBA 数据按 blend_op 合成到全尺寸 canvas
 #[inline]
+#[allow(clippy::too_many_arguments)] // 像素坐标参数本身就多,拆 struct 反而冗余
 fn composite_frame(
     canvas: &mut [u8],
     canvas_w: u32,
@@ -323,8 +328,8 @@ mod tests {
         0x90, 0x77, 0x53, 0xde, // IHDR CRC
         0x00, 0x00, 0x00, 0x0c, // IDAT length
         0x49, 0x44, 0x41, 0x54, // "IDAT"
-        0x08, 0x99, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01,
-        0x97, 0x5e, 0xfa, 0x5b, // IDAT CRC
+        0x08, 0x99, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x97, 0x5e, 0xfa,
+        0x5b, // IDAT CRC
         0x00, 0x00, 0x00, 0x00, // IEND length
         0x49, 0x45, 0x4e, 0x44, // "IEND"
         0xae, 0x42, 0x60, 0x82, // IEND CRC
