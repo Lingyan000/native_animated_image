@@ -1,0 +1,108 @@
+name: Build Native Binaries
+
+# 手动触发或 main 分支 crates/ 目录有改动时触发。
+# 在 macos / windows / ubuntu 各自 build 平台 binary,把产物 commit 回 main 分支
+# (packages/*/...) 以便后续 publish 到 pub.dev 时所有平台 binary 都已就位。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/native_animated_image_codec/**'
+      - '.github/workflows/build-binaries.yml'
+
+jobs:
+  build-macos-ios-android:
+    name: macOS / iOS / Android binaries
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r28b
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      - name: Build macOS dylib
+        run: dart tool/build_native.dart macos
+      - name: Build iOS .a (device + simulator)
+        run: dart tool/build_native.dart ios
+      - name: Build Android .so (4 ABIs)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: dart tool/build_native.dart android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-apple-android
+          path: |
+            packages/native_animated_image_macos/macos/Libs/
+            packages/native_animated_image_ios/ios/Libs/
+            packages/native_animated_image_android/android/src/main/jniLibs/
+
+  build-windows:
+    name: Windows DLL
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Windows dll
+        shell: pwsh
+        run: |
+          cd crates/native_animated_image_codec
+          cargo build --release
+          New-Item -ItemType Directory -Force -Path ../../packages/native_animated_image_windows/windows
+          Copy-Item target/release/native_animated_image_codec.dll ../../packages/native_animated_image_windows/windows/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-windows
+          path: packages/native_animated_image_windows/windows/*.dll
+
+  build-linux:
+    name: Linux .so
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Linux .so
+        run: dart tool/build_native.dart linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-linux
+          path: packages/native_animated_image_linux/linux/*.so
+
+  commit-binaries:
+    name: Commit built binaries to main
+    needs: [build-macos-ios-android, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-apple-android
+          path: ./
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-windows
+          path: packages/native_animated_image_windows/windows/
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-linux
+          path: packages/native_animated_image_linux/linux/
+      - name: Commit binaries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No binary changes"
+            exit 0
+          fi
+          git commit -m ":robot: ci: refresh native binaries (5 platforms)"
+          git push

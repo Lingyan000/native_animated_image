@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    name: Rust (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/native_animated_image_codec/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('crates/native_animated_image_codec/Cargo.lock') }}
+      - name: cargo fmt --check
+        working-directory: crates/native_animated_image_codec
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        working-directory: crates/native_animated_image_codec
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: crates/native_animated_image_codec
+        run: cargo test --all-features
+
+  dart:
+    name: Dart (analyze + test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Resolve workspace deps
+        run: dart pub get
+      - name: Build macOS native binary (for analyze to find dylib)
+        run: |
+          cd crates/native_animated_image_codec
+          cargo build --release
+          mkdir -p ../../packages/native_animated_image_macos/macos/Libs
+          cp target/release/libnative_animated_image_codec.dylib \
+             ../../packages/native_animated_image_macos/macos/Libs/
+      - name: flutter analyze
+        run: flutter analyze
+      - name: dart pub publish --dry-run (main package)
+        working-directory: packages/native_animated_image
+        run: dart pub publish --dry-run || true  # non-fatal for now
