@@ -1,0 +1,34 @@
+[package]
+name = "native_animated_image_codec"
+version = "0.1.0"
+edition = "2021"
+description = "Native animated image (GIF/APNG/animated WebP) codec for Flutter via FFI"
+license = "MIT"
+repository = "https://github.com/Lingyan000/native_animated_image"
+
+[lib]
+# cdylib for runtime FFI (macOS .dylib / Linux .so / Windows .dll / Android .so)
+# staticlib for iOS .a linkage
+crate-type = ["cdylib", "staticlib"]
+name = "native_animated_image_codec"
+
+[dependencies]
+# GIF decoder (frame-by-frame, indexed-to-RGBA via ColorOutput::RGBA)
+gif = "0.13"
+
+# JSON for FFI metadata transfer
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Handle registry locking
+parking_lot = "0.12"
+
+# Error types
+thiserror = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true
+panic = "abort"

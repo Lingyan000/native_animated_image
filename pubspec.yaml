@@ -1,0 +1,16 @@
+name: native_animated_image_workspace
+description: Workspace root for native_animated_image monorepo.
+publish_to: none
+environment:
+  sdk: ^3.6.0
+
+# Dart 3.6+ pub workspace. All sub-packages share a single .dart_tool/.
+# Run `dart pub get` here to bootstrap all packages.
+workspace:
+  - packages/native_animated_image
+  - packages/native_animated_image_macos
+  - packages/native_animated_image_ios
+  - packages/native_animated_image_android
+  - packages/native_animated_image_windows
+  - packages/native_animated_image_linux
+  # - example  # TODO: 建 flutter create example/ 后取消注释

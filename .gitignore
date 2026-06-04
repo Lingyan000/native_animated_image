@@ -1,0 +1,48 @@
+# Rust
+crates/**/target/
+crates/**/Cargo.lock.bak
+**/*.rs.bk
+
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+pubspec.lock
+**/*.iml
+
+# Generated FFI bindings (regenerate via ffigen)
+# (但 .h 文件需要 commit, .dart binding 也 commit)
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Plugin native binaries 是 commit 进 git 的(与 flutter_avif 等社区主流插件一致),
+# 这样用户 clone 后能直接 flutter run,publish 到 pub.dev 时 binary 自动随包分发。
+#
+# 重新生成 binary:`dart tool/build_native.dart <platform>` (脚本会自动 cargo build + 拷贝)
+# 切勿手动 cargo build 后忘记同步 binary 到 packages/*/{macos,ios,android,windows,linux}/Libs/ 等位置
+
+# Example app
+example/build/
+example/.dart_tool/
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+example/ios/Pods/
+example/macos/Pods/
+example/ios/Flutter/Flutter.framework/
+example/ios/Flutter/Flutter.podspec
+example/macos/Flutter/ephemeral/
+
+# CI
+*.log
