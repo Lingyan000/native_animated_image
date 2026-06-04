@@ -13,4 +13,4 @@ workspace:
   - packages/native_animated_image_android
   - packages/native_animated_image_windows
   - packages/native_animated_image_linux
-  # - example  # TODO: 建 flutter create example/ 后取消注释
+  - example

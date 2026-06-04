@@ -89,10 +89,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      # upload-artifact@v4 会 strip common path prefix。我们 upload 时 path 是
+       # packages/native_animated_image_{macos,ios,android}/...,common prefix 是
+       # `packages/`,被 strip 掉,artifact 内剩 native_animated_image_*/...。
+       # 所以 download 时指定 path: packages/ 把前缀加回来。
       - uses: actions/download-artifact@v4
         with:
           name: binaries-apple-android
-          path: ./
+          path: packages/
       - uses: actions/download-artifact@v4
         with:
           name: binaries-windows
