@@ -53,7 +53,7 @@ fn convert_animation(anim: zenavif::DecodedAnimation) -> Result<DecodedImage, De
         let delay_ms = if frame.duration_ms == 0 {
             100
         } else {
-            frame.duration_ms as u32
+            frame.duration_ms
         };
         frames.push(Frame { rgba, delay_ms });
     }
