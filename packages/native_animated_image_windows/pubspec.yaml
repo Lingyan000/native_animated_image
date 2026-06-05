@@ -1,6 +1,6 @@
 name: native_animated_image_windows
 description: Windows implementation of native_animated_image (ships the Rust native binary).
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/Lingyan000/native_animated_image
 
 resolution: workspace

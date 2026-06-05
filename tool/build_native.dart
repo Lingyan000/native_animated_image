@@ -49,10 +49,24 @@ Future<int> _buildMacos() async {
   }
   final rc = await _runCargo(['build', '--release']);
   if (rc != 0) return rc;
-  return _copyFile(
+  const dstPath =
+      'packages/native_animated_image_macos/macos/Libs/libnative_animated_image_codec.dylib';
+  final copyRc = _copyFile(
     '$_crateDir/target/release/libnative_animated_image_codec.dylib',
-    'packages/native_animated_image_macos/macos/Libs/libnative_animated_image_codec.dylib',
+    dstPath,
   );
+  if (copyRc != 0) return copyRc;
+  // cargo build 写的 install_name 是 absolute path,在别人机器 / CI runner 上
+  // dyld 找不到。改成 @rpath/<name> 后,CocoaPods 把 dylib 放进
+  // Frameworks/,app 启动时 dyld 走 @rpath search。必须做这一步。
+  final renameRc = await Process.run('install_name_tool', [
+    '-id',
+    '@rpath/libnative_animated_image_codec.dylib',
+    dstPath,
+  ]);
+  stdout.write(renameRc.stdout);
+  stderr.write(renameRc.stderr);
+  return renameRc.exitCode;
 }
 
 Future<int> _buildIos() async {

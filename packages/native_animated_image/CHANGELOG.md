@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0 - 2026-06-05
+
+**Platform-native AVIF decoder** — new top-level addition.
+
+- Added `NativeAvifPlatform` API: routes AVIF bytes through the OS's
+  optimized decoder via a method channel (iOS/macOS `CGImageSourceCreateWithData`
+  on system ImageIO, Android `ImageDecoder` on API 31+).
+- Targets parity with Safari iOS 16.4+ / macOS 13.4+ AVIF decoding, which
+  uses the same Apple-internal ImageIO codepath — community-reported 2-5x
+  faster than the bundled third-party libavif/dav1d that `flutter_avif`
+  ships.
+- Static AVIF works on all listed platforms. Animated AVIF works on
+  iOS 16.4+ / macOS 13.4+; Android animated AVIF currently throws so
+  callers can fall back to their own backend.
+- Suggested usage:
+  ```dart
+  if (await NativeAvifPlatform.canUse()) {
+    final decoded = await NativeAvifPlatform.decode(bytes);
+    // decoded.frames[0].rgba is RGBA8888 ready for ui.decodeImageFromPixels
+  }
+  ```
+
+GIF/APNG/WebP path is unchanged from 0.1.x.
+
 ## 0.1.2 - 2026-06-05
 
 - **iOS** ship Rust as a dynamic framework (dylib bundled in

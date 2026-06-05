@@ -1,19 +1,55 @@
 import Flutter
 import UIKit
 
-// FFI-only plugin: no method channel or platform code needed.
-//
-// The plugin exists solely to package the Rust static lib (via xcframework)
-// and have it linked into the host app via CocoaPods.
-//
-// IMPORTANT: Because dart:ffi looks up symbols at runtime, Xcode's linker
-// has no compile-time evidence that anyone calls the Rust functions and will
-// dead-strip them. We force the linker to keep them via `-u <symbol>` flags
-// in the podspec's OTHER_LDFLAGS (see native_animated_image_ios.podspec).
-//
-// All actual functionality lives in the main Dart package via dart:ffi.
+/// iOS plugin entry point.
+///
+/// Two responsibilities:
+///
+/// 1. **FFI**: package the Rust dylib (via the bundled xcframework) so
+///    `DynamicLibrary.process()` on the Dart side can resolve symbols from
+///    `native_animated_image_codec` for GIF/APNG/WebP decoding.
+/// 2. **AVIF method channel**: expose Apple's system ImageIO (iOS 16.4+)
+///    to Dart so AVIF (including animated sequences) goes through Apple's
+///    optimized codec — measurably faster than the third-party libavif
+///    that flutter_avif ships. See `NativeAvifPlatformDecoder.swift`.
 public class NativeAnimatedImageIosPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
-    // No registration needed - this is an FFI plugin.
+    let channel = FlutterMethodChannel(
+      name: "com.lingyan000.native_animated_image/avif_platform",
+      binaryMessenger: registrar.messenger())
+    let instance = NativeAnimatedImageIosPlugin()
+    registrar.addMethodCallDelegate(instance, channel: channel)
+  }
+
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "canDecodeAvif":
+      result(NativeAvifPlatformDecoder.canDecodeAvif)
+
+    case "decodeAvif":
+      guard let args = call.arguments as? [String: Any],
+            let typed = args["bytes"] as? FlutterStandardTypedData else {
+        result(FlutterError(code: "invalid_args",
+                            message: "expected { bytes: Uint8List }",
+                            details: nil))
+        return
+      }
+      // Decode on a background QoS so we don't block the platform thread.
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          let decoded = try NativeAvifPlatformDecoder.decode(bytes: typed.data)
+          DispatchQueue.main.async { result(decoded) }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "decode_error",
+                                message: error.localizedDescription,
+                                details: nil))
+          }
+        }
+      }
+
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 }

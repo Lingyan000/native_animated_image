@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-06-05
+
+- Added Swift bridge to system ImageIO for AVIF decoding (static + animated
+  on iOS 16.4+).
+  Used by main package's `NativeAvifPlatform`. Matches Safari performance.
+- Registered as both `ffiPlugin` (Rust codec) and `pluginClass`
+  (AVIF method channel).
+
+
 ## 0.1.2 - 2026-06-05
 
 - Switch the bundled Rust binary from static `.a` to dynamic framework

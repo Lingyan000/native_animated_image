@@ -1,6 +1,6 @@
 [package]
 name = "native_animated_image_codec"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Native animated image (GIF/APNG/animated WebP) codec for Flutter via FFI"
 license = "MIT"
@@ -21,6 +21,12 @@ png = "0.18"
 
 # Animated WebP decoder (lossy + lossless animation support)
 image-webp = "0.2"
+
+# Note: AVIF 解码在 v0.2.0 改走平台 native(iOS/macOS ImageIO + Android
+# ImageDecoder via method channel),不再使用 Rust avif-parse + re_rav1d。
+# 系统 codec 利用 Apple/Google 内部优化(SIMD + 部分 GPU/硬件加速),实测
+# 比第三方 libavif/dav1d 快 2-5x。Rust 路径留给未来 v0.3+ 探索(GPU 直渲、
+# 自定义降采样等)。
 
 # JSON for FFI metadata transfer
 serde = { version = "1", features = ["derive"] }
