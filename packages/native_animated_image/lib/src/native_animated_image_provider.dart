@@ -23,6 +23,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'ffi/native_animated_image_bindings.dart' show kErrUnsupported;
 import 'ffi/native_animated_image_ffi.dart';
 import 'utils/semaphore.dart';
 
@@ -146,10 +147,23 @@ class NativeAnimatedImageProvider extends ImageProvider<NativeAnimatedImageProvi
     try {
       final bytes = await key._source.load();
 
-      // 在 background isolate 中跑 Rust FFI 解码,避免阻塞 UI 线程
-      final decoded = await Isolate.run(() {
-        return NativeAnimatedImageFfi.instance.decode(bytes);
-      }, debugName: 'NativeAnimatedImage.decode');
+      // 在 background isolate 中跑 Rust FFI 解码,避免阻塞 UI 线程。
+      // Rust 端只解动图(GIF / APNG / animated WebP / AVIF)+ animated AVIF
+      // fallback;静态 WebP / 静态 PNG / 静态 GIF / JPEG 等会返
+      // [kErrUnsupported] —— 这种情况 fallback 走 Flutter 内置 codec
+      // (`ui.instantiateImageCodecFromBuffer`),保证调用方拿到的 provider
+      // 对任何主流图片格式都能出图,不需要在外层再 router。
+      DecodedAnimatedImage decoded;
+      try {
+        decoded = await Isolate.run(() {
+          return NativeAnimatedImageFfi.instance.decode(bytes);
+        }, debugName: 'NativeAnimatedImage.decode');
+      } on NativeAnimatedImageException catch (e) {
+        if (e.code == kErrUnsupported) {
+          return _decodeViaFlutterCodec(bytes);
+        }
+        rethrow;
+      }
 
       // 把每帧 RGBA 转为 ui.Image(必须在主 isolate 中做)
       final frames = <_RenderableFrame>[];
@@ -164,6 +178,29 @@ class NativeAnimatedImageProvider extends ImageProvider<NativeAnimatedImageProvi
       return frames;
     } finally {
       _decodeSemaphore.release();
+    }
+  }
+
+  /// Fallback path:Rust 不识别(静态 webp/png/jpeg 等)时走 Flutter 内置
+  /// codec。内置 codec 对静态格式稳定,不会踩 multi_frame_codec 的 #85831 bug
+  /// (那个 bug 只发生在多帧 disposal 路径)。
+  static Future<List<_RenderableFrame>> _decodeViaFlutterCodec(
+    Uint8List bytes,
+  ) async {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final codec = await ui.instantiateImageCodecFromBuffer(buffer);
+    try {
+      final frames = <_RenderableFrame>[];
+      for (int i = 0; i < codec.frameCount; i++) {
+        final frame = await codec.getNextFrame();
+        frames.add(_RenderableFrame(
+          image: frame.image,
+          delay: frame.duration,
+        ));
+      }
+      return frames;
+    } finally {
+      codec.dispose();
     }
   }
 

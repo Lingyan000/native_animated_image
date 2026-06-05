@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2 - 2026-06-05
+
+**Bug fix: `NativeAnimatedImageProvider` now falls back to Flutter's built-in codec for static images.**
+
+Before 0.2.2, calling `NativeAnimatedImageProvider` with a **static** WebP / PNG /
+JPEG image would fail with `kErrUnsupported` (the Rust pipeline only handles
+GIF / APNG / animated WebP / AVIF). Callers had to pre-filter URLs to route
+static images elsewhere — easy to get wrong (e.g. routing all `.webp` URLs to
+this provider would break for static webp, which is the majority case).
+
+Now the provider transparently falls back to
+`ui.instantiateImageCodecFromBuffer` when Rust returns `kErrUnsupported`,
+so the contract is: **any image the platform can display, this provider
+can display.** Static formats avoid the #85831 Skia disposal bug by
+construction (the bug only fires on multi-frame disposal paths).
+
 ## 0.2.1 - 2026-06-05
 
 **Pure-Rust AVIF decoder added as fallback for the platform-native path.**

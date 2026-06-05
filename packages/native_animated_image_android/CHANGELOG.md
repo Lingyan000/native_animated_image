@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 - 2026-06-05
+
+Native binary rebuilt — no code change in this platform package. Bumped
+to stay in sync with `native_animated_image` 0.2.2 which adds Flutter
+built-in codec fallback for static webp/png in NativeAnimatedImageProvider.
+
 ## 0.2.1 - 2026-06-05
 
 - Native binary now includes pure-Rust AVIF decoder (`zenavif` =
