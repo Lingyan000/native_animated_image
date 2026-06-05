@@ -22,7 +22,15 @@ jobs:
           sdk: stable
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,x86_64-linux-android,i686-linux-android
+      # Nightly Rust + armv7 target. `rav1d` (used by `zenavif` for AVIF
+      # decoding) requires nightly on arm32 due to
+      # `stdarch_arm_feature_detection`. tool/build_native.dart's android
+      # step invokes `cargo +nightly ndk -t armeabi-v7a` after the stable
+      # build for the other ABIs.
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: armv7-linux-androideabi
       - uses: nttld/setup-ndk@v1
         id: ndk
         with:

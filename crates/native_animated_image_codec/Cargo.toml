@@ -22,11 +22,18 @@ png = "0.18"
 # Animated WebP decoder (lossy + lossless animation support)
 image-webp = "0.2"
 
-# Note: AVIF 解码在 v0.2.0 改走平台 native(iOS/macOS ImageIO + Android
-# ImageDecoder via method channel),不再使用 Rust avif-parse + re_rav1d。
-# 系统 codec 利用 Apple/Google 内部优化(SIMD + 部分 GPU/硬件加速),实测
-# 比第三方 libavif/dav1d 快 2-5x。Rust 路径留给未来 v0.3+ 探索(GPU 直渲、
-# 自定义降采样等)。
+# AVIF decoder (pure Rust): zenavif wraps rav1d-safe (AV1 decoder, Rust port
+# of dav1d with safe SIMD) + zenavif-parse (ISO BMFF demuxer with animation
+# and grid support). Used as fallback for AVIF where the platform's system
+# decoder either isn't available or doesn't expose per-frame access —
+# notably Android's ImageDecoder which can decode animated AVIF but won't
+# let us pull individual frames out of an AnimatedImageDrawable.
+zenavif = "0.1"
+# Convert zenavif's PixelBuffer to RGBA8888 (needed for Flutter's
+# ui.decodeImageFromPixels which expects PixelFormat.rgba8888).
+zenpixels-convert = { version = "0.2", features = ["rgb"] }
+rgb = "0.8"
+bytemuck = "1"
 
 # JSON for FFI metadata transfer
 serde = { version = "1", features = ["derive"] }

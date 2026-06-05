@@ -16,7 +16,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 
-import '../ffi/native_animated_image_ffi.dart' show DecodedAnimatedImage, AnimatedFrame;
+import '../ffi/native_animated_image_ffi.dart'
+    show DecodedAnimatedImage, AnimatedFrame, NativeAnimatedImageFfi;
 
 const _channel = MethodChannel('com.lingyan000.native_animated_image/avif_platform');
 
@@ -56,33 +57,48 @@ class NativeAvifPlatform {
     });
   }
 
-  /// Decode AVIF bytes via the platform's system decoder.
+  /// Decode AVIF bytes — tries the platform's system decoder first
+  /// (iOS/macOS ImageIO, Android ImageDecoder), then transparently falls back
+  /// to the pure-Rust `zenavif` decoder (via FFI) if the platform side
+  /// declines or fails.
   ///
-  /// Caller MUST check [canUse] first; this method assumes the platform side
-  /// is available and will throw [NativeAvifPlatformException] otherwise.
+  /// Fallback covers e.g.:
+  /// - Android animated AVIF (system ImageDecoder doesn't expose per-frame access)
+  /// - iOS < 16.4 / macOS < 13.4 (no system AVIF decoder)
+  /// - Windows / Linux (no native bridge implemented)
+  /// - Edge cases where ImageIO refuses unusual AVIF profiles
   ///
-  /// Frame RGBA buffers are tightly packed RGBA8888 (premultiplied alpha) —
-  /// exactly the format `ui.decodeImageFromPixels` consumes, so wrapping into
-  /// [ui.Image] is cheap.
+  /// Frame RGBA buffers are tightly packed RGBA8888 (premultiplied alpha on
+  /// platform path; straight alpha on Rust fallback path) — both formats
+  /// `ui.decodeImageFromPixels` consumes directly.
   static Future<DecodedAnimatedImage> decode(Uint8List bytes) async {
     if (bytes.isEmpty) {
       throw NativeAvifPlatformException(
           'empty', 'decode called with empty bytes');
     }
-    try {
-      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
-        'decodeAvif',
-        {'bytes': bytes},
-      );
-      if (raw == null) {
-        throw NativeAvifPlatformException(
-            'null_result', 'platform returned null');
+
+    // Try platform native if the OS supports it
+    if (await canUse()) {
+      try {
+        final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+          'decodeAvif',
+          {'bytes': bytes},
+        );
+        if (raw != null) {
+          return _toDecodedAnimatedImage(raw);
+        }
+      } on PlatformException {
+        // Known fallback cases:
+        // - Android `decode_error` for animated AVIF (`UnsupportedOperationException`)
+        // - iOS `decode_error` for malformed/unusual AVIF profiles
+        // Fall through to Rust path.
+        // (Hard errors like 'invalid_args' / 'unsupported_os' also fall through;
+        // Rust handles malformed input the same way.)
       }
-      return _toDecodedAnimatedImage(raw);
-    } on PlatformException catch (e) {
-      throw NativeAvifPlatformException(
-          e.code, e.message ?? 'platform exception', details: e.details);
     }
+
+    // Fallback: pure-Rust `zenavif` via FFI
+    return NativeAnimatedImageFfi.instance.decode(bytes);
   }
 
   static DecodedAnimatedImage _toDecodedAnimatedImage(

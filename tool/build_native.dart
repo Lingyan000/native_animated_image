@@ -169,25 +169,53 @@ Future<int> _buildAndroid() async {
         'or `sdkmanager "ndk;28.2.13676358"`.');
     return 1;
   }
-  final result = await Process.run(
-    'cargo',
-    [
-      'ndk',
-      '-t', 'arm64-v8a',
-      '-t', 'armeabi-v7a',
-      '-t', 'x86_64',
-      '-t', 'x86',
-      '--platform', '21',
-      '-o', '../../packages/native_animated_image_android/android/src/main/jniLibs',
-      'build', '--release',
-    ],
-    workingDirectory: _crateDir,
-    environment: {'ANDROID_NDK_HOME': ndk},
-    runInShell: true,
-  );
-  stdout.write(result.stdout);
-  stderr.write(result.stderr);
-  return result.exitCode;
+  // Android 64-bit ABIs + x86 emulator: stable Rust handles these.
+  // armeabi-v7a (Android 32-bit ARM) needs nightly Rust because `rav1d` /
+  // `rav1d-safe` (pulled in by `zenavif` for AVIF decoding) uses unstable
+  // `stdarch_arm_feature_detection` on arm32. We split the build into
+  // two cargo-ndk invocations so the stable pipeline isn't held hostage
+  // by the nightly requirement.
+  final stableArgs = [
+    'ndk',
+    '-t', 'arm64-v8a',
+    '-t', 'x86_64',
+    '-t', 'x86',
+    '--platform', '21',
+    '-o', '../../packages/native_animated_image_android/android/src/main/jniLibs',
+    'build', '--release',
+  ];
+  final stable = await Process.run('cargo', stableArgs,
+      workingDirectory: _crateDir,
+      environment: {'ANDROID_NDK_HOME': ndk},
+      runInShell: true);
+  stdout.write(stable.stdout);
+  stderr.write(stable.stderr);
+  if (stable.exitCode != 0) return stable.exitCode;
+
+  // armv7 via nightly. Caller must have installed `nightly` toolchain +
+  // armv7-linux-androideabi target for nightly:
+  //   rustup install nightly
+  //   rustup target add armv7-linux-androideabi --toolchain nightly
+  final nightlyArgs = [
+    '+nightly',
+    'ndk',
+    '-t', 'armeabi-v7a',
+    '--platform', '21',
+    '-o', '../../packages/native_animated_image_android/android/src/main/jniLibs',
+    'build', '--release',
+  ];
+  final nightly = await Process.run('cargo', nightlyArgs,
+      workingDirectory: _crateDir,
+      environment: {'ANDROID_NDK_HOME': ndk},
+      runInShell: true);
+  stdout.write(nightly.stdout);
+  stderr.write(nightly.stderr);
+  if (nightly.exitCode != 0) {
+    stderr.writeln('\narmeabi-v7a build failed. Install nightly first:');
+    stderr.writeln('  rustup install nightly');
+    stderr.writeln('  rustup target add armv7-linux-androideabi --toolchain nightly');
+  }
+  return nightly.exitCode;
 }
 
 Future<int> _buildWindows() async {

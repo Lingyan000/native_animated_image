@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 use thiserror::Error;
 
 pub mod apng_decoder;
+pub mod avif_decoder;
 pub mod ffi;
 pub mod gif_decoder;
 pub mod webp_decoder;
@@ -68,6 +69,9 @@ pub enum DecodeError {
     #[error("WebP decode error: {0}")]
     Webp(String),
 
+    #[error("AVIF decode error: {0}")]
+    Avif(String),
+
     #[error("decoded result has zero frames")]
     EmptyFrames,
 }
@@ -96,6 +100,15 @@ pub fn decode_bytes(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
     if &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
         // webp_decoder 会检查是否有 ANIM chunk,如果是静态 WebP 返回 UnsupportedFormat
         return webp_decoder::decode(bytes);
+    }
+
+    // AVIF: ISO BMFF container with 'ftyp' box, brand 'avif' / 'avis' / 'mif1' /
+    // 'msf1' / 'heic' (HEIC is sibling format). Byte 4-7 = "ftyp", 8-11 = brand.
+    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        let brand = &bytes[8..12];
+        if brand == b"avif" || brand == b"avis" || brand == b"mif1" || brand == b"msf1" {
+            return avif_decoder::decode(bytes);
+        }
     }
 
     Err(DecodeError::UnsupportedFormat)

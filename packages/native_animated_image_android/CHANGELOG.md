@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 - 2026-06-05
+
+- Native binary now includes pure-Rust AVIF decoder (`zenavif` =
+  rav1d + zenavif-parse). Animated AVIF on Android, which Android's
+  system `ImageDecoder` can decode but doesn't expose per-frame access
+  for, now works via the Rust path.
+- `tool/build_native.dart android` splits build: stable Rust for
+  arm64-v8a / x86_64 / x86, nightly Rust for armeabi-v7a (rav1d needs
+  nightly on arm32 due to unstable `stdarch_arm_feature_detection`).
+
+
 ## 0.2.0 - 2026-06-05
 
 - Added Kotlin bridge to system `ImageDecoder` for **static AVIF** on

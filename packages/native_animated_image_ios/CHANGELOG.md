@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 - 2026-06-05
+
+- Version bump alongside main package 0.2.1. Native binary now includes
+  pure-Rust AVIF decoder (`zenavif`) — covers AVIF fallback when this
+  platform's system decoder isn't available (older OS versions, etc.).
+
+
 ## 0.2.0 - 2026-06-05
 
 - Added Swift bridge to system ImageIO for AVIF decoding (static + animated

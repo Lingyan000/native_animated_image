@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.1 - 2026-06-05
+
+**Pure-Rust AVIF decoder added as fallback for the platform-native path.**
+
+- New `crates/native_animated_image_codec/src/avif_decoder.rs` powered by
+  [`zenavif`](https://crates.io/crates/zenavif) (rav1d + zenavif-parse) —
+  pure Rust, no C dependencies, supports static + animated + alpha.
+- `NativeAvifPlatform.decode` now transparently falls back to the Rust
+  decoder when the platform's system decoder fails or isn't available.
+  Notably covers:
+  - **Android animated AVIF** (system `ImageDecoder` can decode animated
+    AVIF but won't let us pull individual frames out of an
+    `AnimatedImageDrawable` — we go through Rust instead).
+  - **iOS < 16.4 / macOS < 13.4** (no system AVIF decoder).
+  - **Windows / Linux** (no native bridge).
+- Performance: Rust path is ~5% slower than libavif/dav1d C path, so
+  Apple/Google's optimized ImageIO/ImageDecoder is still preferred when
+  available. Rust catches the rest.
+
+
 ## 0.2.0 - 2026-06-05
 
 **Platform-native AVIF decoder** — new top-level addition.
