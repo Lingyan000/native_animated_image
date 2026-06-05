@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.2 - 2026-06-05
+
+- **iOS** ship Rust as a dynamic framework (dylib bundled in
+  `.framework`), not a static `.a`. Static-lib FFI symbols get
+  dead-stripped (no compile-time caller) and Xcode 16 rejects every
+  `-force_load` workaround as an unresolved build input. Dylib is
+  loaded by dyld at app startup → all `native_animated_image_*`
+  symbols are immediately available to `DynamicLibrary.process()`.
+- `tool/build_native.dart ios` now builds cdylib for both ios-arm64
+  and ios-arm64-simulator, wraps each in a `.framework` bundle with
+  correct install_name + Info.plist (bundle ID with dashes only,
+  no underscores), and packs them into an xcframework.
+
 ## 0.1.1 - 2026-06-05
 
 - **iOS** podspec: ship `native_animated_image_codec.xcframework` (Apple

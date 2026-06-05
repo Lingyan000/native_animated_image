@@ -60,39 +60,91 @@ Future<int> _buildIos() async {
     stderr.writeln('ios build must run on macOS host');
     return 1;
   }
-  // Build device (arm64) + simulator (arm64) slices
+  // 1. Build dylib (cdylib) for device + simulator
   var rc = await _runCargo(['build', '--release', '--target', 'aarch64-apple-ios']);
   if (rc != 0) return rc;
   rc = await _runCargo(['build', '--release', '--target', 'aarch64-apple-ios-sim']);
   if (rc != 0) return rc;
 
-  // Bundle as xcframework (Apple-recommended way to ship multi-SDK static libs)
-  // — Xcode auto-selects the right slice based on build SDK at link time.
+  // 2. Wrap each dylib into a proper .framework bundle
+  //    (dyld loads the whole library at app startup → DCE bypass).
+  final stagingDir = Directory('${Directory.systemTemp.path}/nai_ios_fw_${DateTime.now().millisecondsSinceEpoch}');
+  stagingDir.createSync(recursive: true);
+
+  for (final pair in [
+    {'rust_target': 'aarch64-apple-ios', 'slice': 'device'},
+    {'rust_target': 'aarch64-apple-ios-sim', 'slice': 'simulator'},
+  ]) {
+    final fwDir = Directory(
+        '${stagingDir.path}/${pair['slice']}/native_animated_image_codec.framework');
+    fwDir.createSync(recursive: true);
+
+    // Copy dylib as `<framework>/native_animated_image_codec` (no extension)
+    final dylibSrc = File(
+        '$_crateDir/target/${pair['rust_target']}/release/libnative_animated_image_codec.dylib');
+    final binDst = File('${fwDir.path}/native_animated_image_codec');
+    dylibSrc.copySync(binDst.path);
+
+    // install_name → @rpath/native_animated_image_codec.framework/native_animated_image_codec
+    final installNameRc = await Process.run('install_name_tool', [
+      '-id',
+      '@rpath/native_animated_image_codec.framework/native_animated_image_codec',
+      binDst.path,
+    ]);
+    if (installNameRc.exitCode != 0) {
+      stderr.write(installNameRc.stderr);
+      return installNameRc.exitCode;
+    }
+
+    // Write minimal Info.plist
+    File('${fwDir.path}/Info.plist').writeAsStringSync(_iosFrameworkInfoPlist);
+  }
+
+  // 3. Bundle device + simulator frameworks into a single xcframework
   final xcframeworkPath =
       'packages/native_animated_image_ios/ios/Libs/native_animated_image_codec.xcframework';
-  // Wipe any previous xcframework before re-creating (xcodebuild refuses to overwrite)
   final xcframeworkDir = Directory(xcframeworkPath);
   if (xcframeworkDir.existsSync()) {
     xcframeworkDir.deleteSync(recursive: true);
   }
-  // Ensure parent dir exists
   Directory(xcframeworkPath).parent.createSync(recursive: true);
 
-  final result = await Process.run('xcodebuild', [
+  final xcResult = await Process.run('xcodebuild', [
     '-create-xcframework',
-    '-library',
-    '$_crateDir/target/aarch64-apple-ios/release/libnative_animated_image_codec.a',
-    '-library',
-    '$_crateDir/target/aarch64-apple-ios-sim/release/libnative_animated_image_codec.a',
+    '-framework',
+    '${stagingDir.path}/device/native_animated_image_codec.framework',
+    '-framework',
+    '${stagingDir.path}/simulator/native_animated_image_codec.framework',
     '-output',
     xcframeworkPath,
   ], runInShell: true);
-  stdout.write(result.stdout);
-  stderr.write(result.stderr);
-  if (result.exitCode != 0) return result.exitCode;
-  stdout.writeln('xcframework: $xcframeworkPath');
+  stdout.write(xcResult.stdout);
+  stderr.write(xcResult.stderr);
+
+  // Cleanup staging
+  stagingDir.deleteSync(recursive: true);
+
+  if (xcResult.exitCode != 0) return xcResult.exitCode;
+  stdout.writeln('xcframework (dylib slices): $xcframeworkPath');
   return 0;
 }
+
+const String _iosFrameworkInfoPlist = '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleExecutable</key><string>native_animated_image_codec</string>
+  <key>CFBundleIdentifier</key><string>com.lingyan000.native-animated-image-codec</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>native_animated_image_codec</string>
+  <key>CFBundlePackageType</key><string>FMWK</string>
+  <key>CFBundleShortVersionString</key><string>0.1.2</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>MinimumOSVersion</key><string>12.0</string>
+</dict>
+</plist>
+''';
 
 Future<int> _buildAndroid() async {
   final ndk = Platform.environment['ANDROID_NDK_HOME'] ??

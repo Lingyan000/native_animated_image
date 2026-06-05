@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 - 2026-06-05
+
+- Switch the bundled Rust binary from static `.a` to dynamic framework
+  (cdylib in a `.framework` bundle, packed into an xcframework with
+  ios-arm64 + ios-arm64-simulator slices).
+- Why: static-lib FFI symbols get dead-stripped (no compile-time
+  caller); `-force_load` workarounds break in Xcode 16's strict
+  build-input validation. Dylib is loaded by dyld at app launch and
+  every symbol is immediately visible to `DynamicLibrary.process()`.
+- Podspec simplified: just `vendored_frameworks` on the xcframework,
+  no more SDK-conditional LIBRARY_SEARCH_PATHS / OTHER_LDFLAGS hacks.
+
 ## 0.1.1 - 2026-06-05
 
 - Switch from separate `Libs/{device,simulator}/*.a` + SDK-conditional

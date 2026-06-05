@@ -1,6 +1,6 @@
 name: native_animated_image_ios
 description: iOS implementation of native_animated_image (ships the Rust native binary).
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/Lingyan000/native_animated_image
 
 resolution: workspace
