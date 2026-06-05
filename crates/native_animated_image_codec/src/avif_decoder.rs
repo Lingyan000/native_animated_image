@@ -24,17 +24,14 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
         Ok(anim) => convert_animation(anim),
         Err(_anim_err) => {
             // 部分 AVIF(可能 strict-static 容器)走 still decode 反而 OK
-            let still = zenavif::decode(bytes)
-                .map_err(|e| DecodeError::Avif(format!("decode: {}", e)))?;
+            let still =
+                zenavif::decode(bytes).map_err(|e| DecodeError::Avif(format!("decode: {}", e)))?;
             let (w, h, rgba) = pixel_buffer_to_rgba(&still)?;
             Ok(DecodedImage {
                 width: w,
                 height: h,
                 loop_count: 0,
-                frames: vec![Frame {
-                    rgba,
-                    delay_ms: 0,
-                }],
+                frames: vec![Frame { rgba, delay_ms: 0 }],
             })
         }
     }
@@ -53,7 +50,11 @@ fn convert_animation(anim: zenavif::DecodedAnimation) -> Result<DecodedImage, De
     let mut frames = Vec::with_capacity(anim.frames.len());
     for frame in anim.frames {
         let (_w, _h, rgba) = pixel_buffer_to_rgba(&frame.pixels)?;
-        let delay_ms = if frame.duration_ms == 0 { 100 } else { frame.duration_ms as u32 };
+        let delay_ms = if frame.duration_ms == 0 {
+            100
+        } else {
+            frame.duration_ms as u32
+        };
         frames.push(Frame { rgba, delay_ms });
     }
 
