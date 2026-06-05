@@ -60,22 +60,38 @@ Future<int> _buildIos() async {
     stderr.writeln('ios build must run on macOS host');
     return 1;
   }
-  // Device (arm64)
+  // Build device (arm64) + simulator (arm64) slices
   var rc = await _runCargo(['build', '--release', '--target', 'aarch64-apple-ios']);
   if (rc != 0) return rc;
-  rc = _copyFile(
-    '$_crateDir/target/aarch64-apple-ios/release/libnative_animated_image_codec.a',
-    'packages/native_animated_image_ios/ios/Libs/device/libnative_animated_image_codec.a',
-  );
-  if (rc != 0) return rc;
-
-  // Simulator (arm64 — Apple Silicon)
   rc = await _runCargo(['build', '--release', '--target', 'aarch64-apple-ios-sim']);
   if (rc != 0) return rc;
-  return _copyFile(
+
+  // Bundle as xcframework (Apple-recommended way to ship multi-SDK static libs)
+  // — Xcode auto-selects the right slice based on build SDK at link time.
+  final xcframeworkPath =
+      'packages/native_animated_image_ios/ios/Libs/native_animated_image_codec.xcframework';
+  // Wipe any previous xcframework before re-creating (xcodebuild refuses to overwrite)
+  final xcframeworkDir = Directory(xcframeworkPath);
+  if (xcframeworkDir.existsSync()) {
+    xcframeworkDir.deleteSync(recursive: true);
+  }
+  // Ensure parent dir exists
+  Directory(xcframeworkPath).parent.createSync(recursive: true);
+
+  final result = await Process.run('xcodebuild', [
+    '-create-xcframework',
+    '-library',
+    '$_crateDir/target/aarch64-apple-ios/release/libnative_animated_image_codec.a',
+    '-library',
     '$_crateDir/target/aarch64-apple-ios-sim/release/libnative_animated_image_codec.a',
-    'packages/native_animated_image_ios/ios/Libs/simulator/libnative_animated_image_codec.a',
-  );
+    '-output',
+    xcframeworkPath,
+  ], runInShell: true);
+  stdout.write(result.stdout);
+  stderr.write(result.stderr);
+  if (result.exitCode != 0) return result.exitCode;
+  stdout.writeln('xcframework: $xcframeworkPath');
+  return 0;
 }
 
 Future<int> _buildAndroid() async {
