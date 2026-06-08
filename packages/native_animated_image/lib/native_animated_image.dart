@@ -14,5 +14,3 @@ export 'src/ffi/native_animated_image_ffi.dart'
         AnimatedFrame,
         NativeAnimatedImageException,
         NativeAnimatedImageFfi;
-export 'src/platform/native_avif_platform.dart'
-    show NativeAvifPlatform, NativeAvifPlatformException;

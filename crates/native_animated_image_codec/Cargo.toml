@@ -1,8 +1,8 @@
 [package]
 name = "native_animated_image_codec"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
-description = "Native animated image (GIF/APNG/animated WebP/AVIF) codec for Flutter via FFI"
+description = "Native animated image (GIF/APNG/animated WebP) codec for Flutter via FFI"
 license = "MIT"
 repository = "https://github.com/Lingyan000/native_animated_image"
 
@@ -22,18 +22,11 @@ png = "0.18"
 # Animated WebP decoder (lossy + lossless animation support)
 image-webp = "0.2"
 
-# AVIF decoder (pure Rust): zenavif wraps rav1d-safe (AV1 decoder, Rust port
-# of dav1d with safe SIMD) + zenavif-parse (ISO BMFF demuxer with animation
-# and grid support). Used as fallback for AVIF where the platform's system
-# decoder either isn't available or doesn't expose per-frame access —
-# notably Android's ImageDecoder which can decode animated AVIF but won't
-# let us pull individual frames out of an AnimatedImageDrawable.
-zenavif = "0.1"
-# Convert zenavif's PixelBuffer to RGBA8888 (needed for Flutter's
-# ui.decodeImageFromPixels which expects PixelFormat.rgba8888).
-zenpixels-convert = { version = "0.2", features = ["rgb"] }
-rgb = "0.8"
-bytemuck = "1"
+# AVIF 在 v0.3.0 移除。v0.2.x 用 zenavif (rav1d-safe) 做 AVIF 解码,
+# 但 rav1d 在 ARM SIMD path 有 panic crash bug (mc_arm.rs:5905 越界),
+# Cargo profile panic=abort 直接 crash 整个 app。armv7 还要 nightly Rust。
+# 综合判断不适合作为生产依赖。
+# AVIF 解码请使用 `flutter_avif` 包 (libavif + dav1d C 库,工业标准稳定)。
 
 # JSON for FFI metadata transfer
 serde = { version = "1", features = ["derive"] }

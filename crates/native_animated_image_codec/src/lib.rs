@@ -17,7 +17,6 @@ use std::sync::OnceLock;
 use thiserror::Error;
 
 pub mod apng_decoder;
-pub mod avif_decoder;
 pub mod ffi;
 pub mod gif_decoder;
 pub mod webp_decoder;
@@ -69,9 +68,6 @@ pub enum DecodeError {
     #[error("WebP decode error: {0}")]
     Webp(String),
 
-    #[error("AVIF decode error: {0}")]
-    Avif(String),
-
     #[error("decoded result has zero frames")]
     EmptyFrames,
 }
@@ -102,14 +98,15 @@ pub fn decode_bytes(bytes: &[u8]) -> Result<DecodedImage, DecodeError> {
         return webp_decoder::decode(bytes);
     }
 
-    // AVIF: ISO BMFF container with 'ftyp' box, brand 'avif' / 'avis' / 'mif1' /
-    // 'msf1' / 'heic' (HEIC is sibling format). Byte 4-7 = "ftyp", 8-11 = brand.
-    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
-        let brand = &bytes[8..12];
-        if brand == b"avif" || brand == b"avis" || brand == b"mif1" || brand == b"msf1" {
-            return avif_decoder::decode(bytes);
-        }
-    }
+    // AVIF (ISO BMFF ftyp box) 在 v0.3.0 后明确不在此包范围内。
+    // v0.2.x 曾用 zenavif(rav1d-safe)做 fallback,但 rav1d 在 ARM SIMD path
+    // 有 panic crash bug(mc_arm.rs 越界)+ armv7 需要 nightly toolchain,
+    // 综合判断不适合作为生产依赖。AVIF 解码请使用 `flutter_avif` 包
+    // (libavif + dav1d C 库,工业标准,稳定)。
+    //
+    // 这里直接返 UnsupportedFormat,dart 端 [NativeAnimatedImageProvider] 内的
+    // Flutter codec fallback 会兜底(Skia 在 iOS 16.4+ / Android 14+ 支持 AVIF
+    // 静态解码);完整动画 AVIF 调用方应该自己 router 走 flutter_avif。
 
     Err(DecodeError::UnsupportedFormat)
 }

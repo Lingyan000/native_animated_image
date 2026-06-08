@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-06-08
+
+**BREAKING:** AVIF support removed from `native_animated_image`. See main package
+CHANGELOG. Binary rebuilt without zenavif (rav1d), much smaller and no longer
+requires nightly Rust on armv7.
+
 ## 0.2.2 - 2026-06-05
 
 Native binary rebuilt — no code change in this platform package. Bumped

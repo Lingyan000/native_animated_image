@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.3.0 - 2026-06-08
+
+**BREAKING: AVIF support removed.**
+
+v0.2.x 引入的 `NativeAvifPlatform`(iOS/macOS ImageIO + Android ImageDecoder
++ Rust zenavif 兜底)有 **致命问题**:zenavif 内部 `rav1d-safe 0.5.7` 在 ARM
+SIMD 路径(`mc_arm.rs:5905`)有 `usize` underflow,触发即 panic;Cargo profile
+`panic = "abort"` 直接 crash 整个 app。线上多次出现:
+
+```
+thread 'rav1d-worker-N' panicked at .../rav1d-safe/src/safe_simd/mc_arm.rs:5905:46:
+range start index 18446744073709550077 out of range for slice of length 262144
+Lost connection to device.
+```
+
+zenavif 还要求 armv7 用 nightly Rust toolchain(`stdarch_arm_feature_detection`
+unstable),作为生产依赖不合适。
+
+**v0.3.0 把 AVIF 彻底从包里剥离**。如果你需要 AVIF,用
+[`flutter_avif`](https://pub.dev/packages/flutter_avif)(libavif + dav1d
+C 库,工业标准,稳)。本包保持只做"绕 Skia multi_frame_codec #85831 bug 的
+GIF / APNG / animated WebP 解码器"这个清晰职责。
+
+### Removed
+- `NativeAvifPlatform`, `NativeAvifPlatformException`(已从 export 移除)
+- iOS / macOS Swift `NativeAvifPlatformDecoder` + ImageIO bridge
+- Android Kotlin `ImageDecoder` AVIF method handler
+- Rust crate `avif_decoder.rs` 模块 + `zenavif` / `zenpixels-convert` /
+  `rgb` / `bytemuck` 依赖
+- `DecodeError::Avif` variant
+
+### Changed
+- AVIF magic bytes(ISO BMFF ftyp / avif / avis / mif1 / msf1)进 Rust
+  decode_bytes 现在返 `UnsupportedFormat`,触发 [NativeAnimatedImageProvider]
+  内的 Flutter codec fallback(Skia 在 iOS 16.4+ / Android 14+ 支持 AVIF
+  静态解码)。如果上层需要完整 AVIF 动画,应该自己 router 到 `flutter_avif`。
+- Cargo profile / build 流程精简:armv7 不再需要 nightly toolchain,
+  全部 4 ABI 一次 `cargo-ndk build` 完成。
+- Binary 大幅瘦身:macOS dylib 从 1.7MB → 474KB(-72%),Android / Linux /
+  Windows 类似比例缩减。
+
+### Migration from 0.2.x
+```dart
+// before
+import 'package:native_animated_image/native_animated_image.dart'
+    show NativeAvifPlatform;
+final decoded = await NativeAvifPlatform.decode(bytes);
+
+// after — 用 flutter_avif
+import 'package:flutter_avif/flutter_avif.dart';
+final frames = await decodeAvif(bytes);
+```
+
 ## 0.2.2 - 2026-06-05
 
 **Bug fix: `NativeAnimatedImageProvider` now falls back to Flutter's built-in codec for static images.**

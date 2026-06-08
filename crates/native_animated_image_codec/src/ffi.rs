@@ -52,8 +52,7 @@ pub unsafe extern "C" fn native_animated_image_decode(
         Err(DecodeError::EmptyFrames)
         | Err(DecodeError::Gif(_))
         | Err(DecodeError::Png(_))
-        | Err(DecodeError::Webp(_))
-        | Err(DecodeError::Avif(_)) => ERR_DECODE,
+        | Err(DecodeError::Webp(_)) => ERR_DECODE,
     }
 }
 
