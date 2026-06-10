@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.1 - 2026-06-10
+
+**修复:不透明(无 alpha 通道)动画 WebP 解码必定 crash 整个 app。**
+
+`webp_decoder` 此前固定按 `宽×高×4` 分配每帧 buffer(默认所有 WebP 都带 alpha),
+但 `image-webp` 对无 alpha 通道的图期望的是 `宽×高×3`(紧密 RGB)。`read_frame`
+(image-webp `decoder.rs:754`)开头即 `assert_eq!(Some(buf.len()), output_buffer_size())`,
+两者不等直接 panic;叠加 Cargo profile `panic = "abort"` + FFI 入口无 `catch_unwind`,
+panic 逃逸 `extern "C"` 边界 → **SIGABRT,整个 app 崩溃**:
+
+```
+assertion `left == right` failed
+  left: Some(409600)   // 宽×高×4 (我们给的 buffer)
+ right: Some(307200)   // 宽×高×3 (image-webp 期望)
+```
+
+任何不透明 RGB 动画 WebP(很常见)都会触发,并非偶发畸形图片。
+
+修复(四层):
+
+- **根治**:`webp_decoder` 改用 `decoder.output_buffer_size()` 分配 buffer,无 alpha
+  时把紧密 RGB 展开成 RGBA8888(alpha=255),尺寸永远匹配,从源头消除 assert。
+- **防线 1**:FFI 入口 `native_animated_image_decode` 增加 `catch_unwind`,把任何
+  解码器 panic(GIF/PNG/WebP 通吃)收敛成新错误码 `kErrPanic`(-6),绝不再 abort 进程。
+- **防线 2**:`webp_decoder` 逐帧 `catch_unwind`,畸形帧时截断保留已解出的帧。
+- **配套**:Cargo profile `panic = "abort"` → `"unwind"`(catch_unwind 生效的前提)。
+
 ## 0.3.0 - 2026-06-08
 
 **BREAKING: AVIF support removed.**

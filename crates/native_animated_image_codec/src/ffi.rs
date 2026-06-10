@@ -7,6 +7,7 @@
 //!  -3  = decode error (decoder threw error)
 //!  -4  = handle not found
 //!  -5  = frame index out of range
+//!  -6  = decoder panicked (已被 catch_unwind 捕获,畸形输入触发底层 crate 的 panic)
 
 use crate::{decode_bytes, register, release, with_image, DecodeError};
 use std::ffi::{c_char, CString};
@@ -18,6 +19,9 @@ const ERR_UNSUPPORTED: i32 = -2;
 const ERR_DECODE: i32 = -3;
 const ERR_HANDLE_NOT_FOUND: i32 = -4;
 const ERR_FRAME_OOR: i32 = -5;
+/// 解码器内部 panic(被 catch_unwind 捕获)。image-webp 等 forbid(unsafe) 的 crate
+/// 在 canvas/帧尺寸不一致等畸形动画输入上会 assert_eq! panic 而非返回 Err。
+const ERR_PANIC: i32 = -6;
 
 /// 解码动图字节流,成功时返回 handle(写入 *out_handle),失败返回错误码
 ///
@@ -41,7 +45,18 @@ pub unsafe extern "C" fn native_animated_image_decode(
     }
 
     let slice = std::slice::from_raw_parts(bytes, len);
-    match decode_bytes(slice) {
+
+    // 解码器吃任意网络输入,某些畸形/非标准图片会让底层 crate(image-webp 等
+    // forbid(unsafe) 的 crate,越界即 panic)在解码过程中 panic。catch_unwind 把
+    // panic 收敛成错误码,绝不让它逃逸出 extern "C" 边界 —— 否则(Rust 1.81+)会
+    // abort 整个进程,把 app 一起带走。必须配合 Cargo.toml `panic = "unwind"`。
+    // (闭包仅捕获 &[u8],本身就是 UnwindSafe,无需 AssertUnwindSafe。)
+    let decoded = match std::panic::catch_unwind(|| decode_bytes(slice)) {
+        Ok(r) => r,
+        Err(_) => return ERR_PANIC,
+    };
+
+    match decoded {
         Ok(image) => {
             let handle = register(image);
             *out_handle = handle;
@@ -246,5 +261,82 @@ mod tests {
         assert!(!v.is_empty());
         // 形如 "0.1.0"
         assert!(v.split('.').count() >= 2);
+    }
+
+    /// 拼一个 RIFF 子 chunk:fourcc(4) + size(LE u32) + payload(奇数长度补 1 pad 字节)
+    fn riff_chunk(fourcc: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut v = Vec::with_capacity(8 + payload.len() + 1);
+        v.extend_from_slice(fourcc);
+        v.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        v.extend_from_slice(payload);
+        if payload.len() % 2 == 1 {
+            v.push(0);
+        }
+        v
+    }
+
+    /// 构造一个"看起来是动画"(VP8X anim flag + ANIM + 2×ANMF)但帧 bitstream 是
+    /// 垃圾的 WebP。image-webp(forbid unsafe)在这类输入上要么返回 Err、要么在
+    /// read_frame 内部 assert_eq! panic(正是线上 crash 来源)。
+    fn build_malformed_animated_webp() -> Vec<u8> {
+        let (cw, ch): (u32, u32) = (64, 64);
+        let (wm1, hm1) = (cw - 1, ch - 1);
+
+        // VP8X: flags(1) + reserved(3) + canvasW-1(3 LE) + canvasH-1(3 LE)
+        let mut vp8x = Vec::new();
+        vp8x.push(0x02); // bit1 = animation
+        vp8x.extend_from_slice(&[0, 0, 0]);
+        vp8x.extend_from_slice(&wm1.to_le_bytes()[..3]);
+        vp8x.extend_from_slice(&hm1.to_le_bytes()[..3]);
+
+        // ANIM: bg_color(4) + loop_count(2)
+        let anim = [0u8, 0, 0, 0, 0, 0];
+
+        // ANMF: x(3)+y(3)+w-1(3)+h-1(3)+duration(3)+flags(1) + frame bitstream(垃圾)
+        let mut anmf = Vec::new();
+        anmf.extend_from_slice(&[0, 0, 0]); // x
+        anmf.extend_from_slice(&[0, 0, 0]); // y
+        anmf.extend_from_slice(&wm1.to_le_bytes()[..3]);
+        anmf.extend_from_slice(&hm1.to_le_bytes()[..3]);
+        anmf.extend_from_slice(&[0, 0, 0]); // duration
+        anmf.push(0); // flags
+        anmf.extend_from_slice(&[0xde, 0xad, 0xbe, 0xef, 0x00, 0x11, 0x22]);
+
+        let mut body = Vec::new();
+        body.extend_from_slice(&riff_chunk(b"VP8X", &vp8x));
+        body.extend_from_slice(&riff_chunk(b"ANIM", &anim));
+        body.extend_from_slice(&riff_chunk(b"ANMF", &anmf));
+        body.extend_from_slice(&riff_chunk(b"ANMF", &anmf)); // 第 2 帧 → num_frames>1
+
+        let mut out = Vec::new();
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&((4 + body.len()) as u32).to_le_bytes());
+        out.extend_from_slice(b"WEBP");
+        out.extend_from_slice(&body);
+        out
+    }
+
+    /// 回归:线上 SIGABRT 来自 image-webp 解动画 WebP 时
+    /// `assert_eq! left: Some(409600), right: Some(307200)` 的 panic 逃逸 extern "C"
+    /// 边界。native_animated_image_decode 的 catch_unwind 必须把任何解码 panic /
+    /// 错误收敛成负错误码,绝不 abort 进程。
+    ///
+    /// 注:本测试在 dev profile(panic=unwind)下跑 —— 若兜底被移除,panic 会逃逸到
+    /// 测试函数被标红;兜底在则返回 rc<0。release 的 `panic=unwind` 由 Cargo.toml
+    /// 保证(见该文件注释),二者缺一不可。
+    #[test]
+    fn ffi_decode_malformed_animated_webp_does_not_abort() {
+        let webp = build_malformed_animated_webp();
+        let mut handle: u64 = 0;
+        let rc = unsafe { native_animated_image_decode(webp.as_ptr(), webp.len(), &mut handle) };
+
+        // 不崩 + 返回失败码(ERR_PANIC=-6 / ERR_DECODE=-3 / ERR_UNSUPPORTED=-2 等),
+        // 且不产生悬空 handle。
+        assert!(
+            rc < 0,
+            "expected negative error code for malformed animated WebP, got {}",
+            rc
+        );
+        assert_eq!(handle, 0, "no handle should be produced on failure");
     }
 }

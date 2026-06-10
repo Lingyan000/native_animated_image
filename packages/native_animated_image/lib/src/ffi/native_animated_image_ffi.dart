@@ -216,6 +216,8 @@ class NativeAnimatedImageFfi {
         return 'handle not found';
       case kErrFrameOor:
         return 'frame index out of range';
+      case kErrPanic:
+        return 'decoder panicked (malformed input)';
       default:
         return 'unknown error';
     }

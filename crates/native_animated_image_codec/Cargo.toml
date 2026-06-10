@@ -1,6 +1,6 @@
 [package]
 name = "native_animated_image_codec"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Native animated image (GIF/APNG/animated WebP) codec for Flutter via FFI"
 license = "MIT"
@@ -43,4 +43,9 @@ lto = true
 codegen-units = 1
 opt-level = "z"
 strip = true
-panic = "abort"
+# 必须是 unwind(不可改回 abort):FFI 入口 native_animated_image_decode 用
+# catch_unwind 把解码器(image-webp 等 forbid(unsafe) 的 crate,越界即 panic)在
+# 畸形/非标准动画图片上的 panic 收敛成错误码。abort 模式下 catch_unwind 是 no-op,
+# panic 会直接 SIGABRT 把整个 app 进程带走(后台解码线程崩 = 全局崩)。
+# 代价:二进制略增 landing pad,但解码任意网络图片的健壮性远比这点体积重要。
+panic = "unwind"

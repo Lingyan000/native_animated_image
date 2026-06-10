@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 - 2026-06-10
+
+Native binary rebuilt with a WebP decode fix: opaque (no-alpha) animated WebP no
+longer crashes the app. `image-webp` expects a `w*h*3` (RGB) buffer for images
+without an alpha channel, but the decoder always allocated `w*h*4`, tripping an
+`assert_eq!` in `read_frame` and aborting the process. Decoder panics are now
+also caught at the FFI boundary instead of aborting. See the main package
+CHANGELOG for details.
+
 ## 0.3.0 - 2026-06-08
 
 **BREAKING:** AVIF support removed from `native_animated_image`. See main package

@@ -62,6 +62,7 @@ const int kErrUnsupported = -2;
 const int kErrDecode = -3;
 const int kErrHandleNotFound = -4;
 const int kErrFrameOor = -5;
+const int kErrPanic = -6;
 
 // ============== DynamicLibrary 加载 ==============
 

@@ -1,6 +1,6 @@
 name: native_animated_image_ios
 description: iOS implementation of native_animated_image (Rust binary + system ImageIO AVIF bridge).
-version: 0.3.0
+version: 0.3.1
 repository: https://github.com/Lingyan000/native_animated_image
 
 resolution: workspace
