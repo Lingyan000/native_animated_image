@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 - 2026-06-12
+
+Version bump only, to stay aligned with the monorepo (0.3.2 ships a macOS
+universal-binary fix). No code or native binary change on this platform.
+
 ## 0.3.1 - 2026-06-10
 
 Native binary rebuilt with a WebP decode fix: opaque (no-alpha) animated WebP no

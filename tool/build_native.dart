@@ -6,8 +6,9 @@
 //
 // Where <platform> is one of: macos, ios, android, windows, linux, all
 //
-// - `macos` / `windows` / `linux`: cargo build for host triple (must run on the
-//   target OS — cross-compile is too painful)
+// - `macos`: cargo build for aarch64-apple-darwin + x86_64-apple-darwin, lipo 成
+//   universal dylib(纯 Rust 依赖,交叉编译无 C 工具链负担)
+// - `windows` / `linux`: cargo build for host triple (must run on the target OS)
 // - `ios`: cargo build for aarch64-apple-ios + aarch64-apple-ios-sim (macOS host)
 // - `android`: cargo-ndk build for arm64-v8a / armeabi-v7a / x86_64 / x86
 // - `all`: do everything possible on this host (other platforms emit a warning)
@@ -47,15 +48,26 @@ Future<int> _buildMacos() async {
     stderr.writeln('macos build must run on macOS host');
     return 1;
   }
-  final rc = await _runCargo(['build', '--release']);
-  if (rc != 0) return rc;
+  // 出 universal(arm64 + x86_64),让 Apple Silicon 和 Intel 都能加载。
+  // 在 Apple Silicon host 上交叉编 x86_64 也是开箱即用(纯 Rust 依赖,无 C/cmake)。
+  const targets = ['aarch64-apple-darwin', 'x86_64-apple-darwin'];
+  for (final target in targets) {
+    final rc = await _runCargo(['build', '--release', '--target', target]);
+    if (rc != 0) return rc;
+  }
   const dstPath =
       'packages/native_animated_image_macos/macos/Libs/libnative_animated_image_codec.dylib';
-  final copyRc = _copyFile(
-    '$_crateDir/target/release/libnative_animated_image_codec.dylib',
+  File(dstPath).parent.createSync(recursive: true);
+  final lipoRc = await Process.run('lipo', [
+    '-create',
+    for (final target in targets)
+      '$_crateDir/target/$target/release/libnative_animated_image_codec.dylib',
+    '-output',
     dstPath,
-  );
-  if (copyRc != 0) return copyRc;
+  ]);
+  stdout.write(lipoRc.stdout);
+  stderr.write(lipoRc.stderr);
+  if (lipoRc.exitCode != 0) return lipoRc.exitCode;
   // cargo build 写的 install_name 是 absolute path,在别人机器 / CI runner 上
   // dyld 找不到。改成 @rpath/<name> 后,CocoaPods 把 dylib 放进
   // Frameworks/,app 启动时 dyld 走 @rpath search。必须做这一步。

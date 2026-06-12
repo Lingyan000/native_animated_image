@@ -22,7 +22,7 @@ jobs:
           sdk: stable
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+          targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
       # v0.3.0: 砍 zenavif/rav1d 后,armv7 不再需要 nightly toolchain。
       - uses: nttld/setup-ndk@v1
         id: ndk

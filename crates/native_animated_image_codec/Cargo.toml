@@ -1,6 +1,6 @@
 [package]
 name = "native_animated_image_codec"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "Native animated image (GIF/APNG/animated WebP) codec for Flutter via FFI"
 license = "MIT"

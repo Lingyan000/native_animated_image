@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 - 2026-06-12
+
+**修复:macOS 原生库此前只含 arm64,Intel(x86_64)缺失导致动图解码不可用。**
+
+`native_animated_image_macos` 携带的 `libnative_animated_image_codec.dylib` 之前
+只编了 arm64。构建 macOS app 的 x86_64 切片时,链接器会直接忽略这个库
+(`ld: ignoring file ... required architecture x86_64`),Intel 机器上 GIF/APNG/
+WebP 动图解码静默失效。macOS 构建脚本改为同时交叉编译 arm64 + x86_64 并 lipo 成
+universal dylib(纯 Rust 依赖,交叉编译无 C 工具链负担)。Dart 代码无变化。
+
 ## 0.3.1 - 2026-06-10
 
 **修复:不透明(无 alpha 通道)动画 WebP 解码必定 crash 整个 app。**
